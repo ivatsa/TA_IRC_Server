@@ -10,6 +10,116 @@
 		#message {width:100%;line-height:20px}
 	</style>
 	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+	<script type="text/javascript">
+
+	/***********************************************
+	* Dynamic Ajax Content- © Dynamic Drive DHTML code library (www.dynamicdrive.com)
+	* This notice MUST stay intact for legal use
+	* Visit Dynamic Drive at http://www.dynamicdrive.com/ for full source code
+	***********************************************/
+
+	var bustcachevar=1 //bust potential caching of external pages after initial request? (1=yes, 0=no)
+	var loadedobjects=""
+	var rootdomain="http://"+window.location.hostname
+	var bustcacheparameter=""
+
+	function ajaxpage(url, containerid){
+		var page_request = false;
+		var return_value;
+		if (window.XMLHttpRequest) // if Mozilla, Safari etc
+			page_request = new XMLHttpRequest()
+		else if (window.ActiveXObject){ // if IE
+			try {
+				page_request = new ActiveXObject("Msxml2.XMLHTTP")
+			} 
+			catch (e){
+				try{
+					page_request = new ActiveXObject("Microsoft.XMLHTTP")
+				}
+				catch (e){}
+			}
+		}
+		else
+		return false
+		page_request.onreadystatechange=function(){
+			return_value = loadpage(page_request, containerid)
+		}
+		if (bustcachevar) //if bust caching of external page
+			bustcacheparameter=(url.indexOf("?")!=-1)? "&"+new Date().getTime() : "?"+new Date().getTime()
+		page_request.open('GET', url+bustcacheparameter, true);
+		page_request.send(null);
+	}
+
+	function loadpage(page_request, containerid){
+		if (page_request.readyState == 4 && (page_request.status==200 || window.location.href.indexOf("http")==-1)) {
+			if(document.getElementById("clicked").innerHTML == 'detect') {
+				document.getElementById(containerid).innerHTML=JSON.parse(page_request.responseText).data[0].ancestors[0].name;
+				document.getElementById('location_id').innerHTML=JSON.parse(page_request.responseText).data[0].ancestors[0].location_id;
+//send server the returned location_ID to join a room
+				send('{"action":"login","location_id":"'+ JSON.parse(page_request.responseText).data[0].ancestors[0].location_id +'","username":"TripAdvisor"}');
+				log ("Welcome to " + document.getElementById(containerid).innerHTML +" Chat room");
+				//log (page_request.status);
+			}
+			else{
+				log ("location string search");
+				log (page_request.responseText + '' + window.location.href.indexOf("http"));
+			}
+		}
+	}
+
+	function loadobjs(){
+		if (!document.getElementById)
+			return
+		for (i=0; i<arguments.length; i++){
+			var file=arguments[i]
+			var fileref=""
+			if (loadedobjects.indexOf(file)==-1){ //Check to see if this object has not already been added to page before proceeding
+				if (file.indexOf(".js")!=-1){ //If object is a js file
+					fileref=document.createElement('script')
+					fileref.setAttribute("type","text/javascript");
+					fileref.setAttribute("src", file);
+				}
+				else if (file.indexOf(".css")!=-1){ //If object is a css file
+					fileref=document.createElement("link")
+					fileref.setAttribute("rel", "stylesheet");
+					fileref.setAttribute("type", "text/css");
+					fileref.setAttribute("href", file);
+				}
+			}
+			if (fileref!=""){
+				document.getElementsByTagName("head").item(0).appendChild(fileref)
+				loadedobjects+=file+" " //Remember this object as being already added to page
+			}
+		}
+	}
+
+	var x = document.getElementById('222');
+
+	function getLocation()
+	  {
+	  if (navigator.geolocation)
+		{
+		navigator.geolocation.getCurrentPosition(showPosition);
+		}
+	  else{x.innerHTML="Geolocation is not supported by this browser.";}
+	  }
+
+
+	function showPosition(position)
+	  {
+	  	//log("in show position");
+	   //ajaxpage('https://hare.tripadvisor.com/api/internal/1.0/map/'+ position.coords.latitude + ','+ position.coords.longitude + '/all','location_string');
+	   	if(document.getElementById("clicked").innerHTML == 'detect') {
+	  		//alert("Detecting");
+		   ajaxpage('https://hare.tripadvisor.com/api/internal/1.0/map/'+ position.coords.latitude + ','+ position.coords.longitude + '/all','location_string');
+		}
+		if (document.getElementById("clicked").innerHTML == 'change') {
+			//alert("Changing");
+			log("connecting to   "+ 'https://hare.tripadvisor.com/TypeAheadJson?action=SITEWIDE&global=true&startTime=1375376858698&query='+document.getElementById('change').value);
+			ajaxpage('https://hare.tripadvisor.com/TypeAheadJson?action=SITEWIDE&global=true&startTime=1375376858698&query='+document.getElementById('change').value, 'location_string')
+		}
+	  }
+	</script>
 	<script src="fancywebsocket.js"></script>
 	<script>
 		var Server;
@@ -17,6 +127,10 @@
 		function log( text ) {
 			$log = $('#log');
 			//Add text to log
+
+			//obj = JSON.parse(text);
+			//alert(obj.count);
+
 			$log.append(($log.val()?"\n":'')+text);
 			//Autoscroll
 			$log[0].scrollTop = $log[0].scrollHeight - $log[0].clientHeight;
@@ -26,15 +140,15 @@
 			Server.send( 'message', text );
 		}
 
-		$(document).ready(function() {
+		$(document).ready(start);
+		function start() {
 			log('Connecting...');
 			Server = new FancyWebSocket('ws://192.168.45.143:9300');
 
 			$('#message').keypress(function(e) {
 				if ( e.keyCode == 13 && this.value ) {
 					log( 'You: ' + this.value );
-					send( this.value );
-
+					send('{"type_of_client":"Browser","action":"message","message":{"username":"TripAdvisor","text":"'+ this.value +'","is_review":"NO"},"location_id" : "'+document.getElementById("location_id").innerHTML+'"}');
 					$(this).val('');
 				}
 			});
@@ -42,7 +156,10 @@
 			//Let the user know we're connected
 			Server.bind('open', function() {
 				log( "Connected." );
-			});
+
+			// after connection is established look for current location and get into chat room.
+				getLocation();
+			});	
 
 			//OH NOES! Disconnection occurred.
 			Server.bind('close', function( data ) {
@@ -51,18 +168,46 @@
 
 			//Log any messages sent from server
 			Server.bind('message', function( payload ) {
-				log( payload );
+				if(JSON.parse(payload).action == 'message') {
+					if(JSON.parse(payload).number_of_clients != '') {
+						document.getElementById('222').innerHTML = JSON.parse(payload).number_of_clients;
+						log( JSON.parse(payload).message.username + ' has joined');
+					}
+					else
+						log( JSON.parse(payload).message.username + ': ' + JSON.parse(payload).message.text );
+				}
 			});
 
 			Server.connect();
-		});
+		}
+		function restart(){
+			//alert(document.getElementById("change").value);
+			document.getElementById("clicked").innerHTML='change';
+			send('{"action":"logout","location_id":"'+ document.getElementById("location_id").innerHTML +'","username":"TripAdvisor"}');
+			start();
+		}
+		function detect(){
+		document.getElementById("clicked").innerHTML='detect';
+			send('{"action":"logout","location_id":"'+ document.getElementById("location_id").innerHTML +'","username":"TripAdvisor"}');
+			start();
+		}
+		
+//<input type='text' id='change' name='change' />
+//		<button onclick="restart()">Change my room</button>	
 	</script>
-</head>
+	</head>
 
 <body>
 	<div id='body'>
 		<textarea id='log' name='log' readonly='readonly'></textarea><br/>
 		<input type='text' id='message' name='message' />
+		<div id="location_string"></div>
+		<div id="location_id" style="display: none"></div>
+		<br><br>
+		
+		<button onclick="detect()">Detect My location & connect</button>	
+		<div id="clicked" style="display: none">detect</div>
+		<div id="222"></div>
 	</div>
 </body>
 

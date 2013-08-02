@@ -73,6 +73,7 @@ class PHPWebSocket
 	public $wsOnEvents      = array();
     
     public $broadcastHash = array();
+    public $loggedUsers = array();
     
     
 
@@ -234,6 +235,9 @@ class PHPWebSocket
 					}
 				}
 			}
+            else{
+                $this->wsRemoveClient($clientID);
+            }
 		}
 	}
 
